@@ -32,9 +32,17 @@ local function GetDebuffRemainingTime(debuffName, unit)
     return 0  -- Return 0 if the debuff is not found
 end
 
+-- Deactivate/Activate addon
+local deactivate = true
+
+
 -- Function to suggest the next spell
 local function SuggestNextSpell()
     -- No target, hide frame
+    if Deactivate then
+        return
+    end
+
     if not UnitExists("target") and not UnitIsEnemy("player", "target") then
         frame.texture:SetTexture(nil);
         return
@@ -50,18 +58,17 @@ local function SuggestNextSpell()
     local VT_TimeLeft = GetDebuffRemainingTime("Vampiric Touch", "target")
 
     
-    print("VT left",VT_TimeLeft)
     if VT_TimeLeft < 2 then
         if (VT_TimeLeft < 1) then    
             icon = SpellIcons.VampiricTouch
         else
             icon = SpellIcons.MindBlast
         end
+    elseif DP_TimeLeft == 0 then
+        icon = SpellIcons.DevouringPlague
     elseif SWP_TimeLeft > 0 then
-        print("MF")
         icon = SpellIcons.MindFlay
     else
-        print("SW:P")
         icon = SpellIcons.ShadowWordPain
     end
 
@@ -105,7 +112,16 @@ frame:SetScript("OnEvent", function(self, event, unit, spellName, ...)
     end
 end)
 
-
+SLASH_AUTOMATAPriest1 = "/automatapriest"
+SlashCmdList["AUTOMATAPriest"] = function(msg)
+    deactivate = not deactivate  -- Toggle the addon state
+    if deactivate then
+        print("Automatapriest enabled.")
+    else
+        print("Automatapriest disabled.")
+        frame.texture:SetTexture(nil)  -- Hide the frame when disabled
+    end
+end
 
 -- Register events
 frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
