@@ -13,21 +13,34 @@ castButton:SetPoint("CENTER", frame, "CENTER")
 castButton:SetAttribute("type", "spell")
 castButton:SetAttribute("spell", "Shadow Word: Pain") -- Default spell
 
+-- Function to check if Shadow Word: Pain is applied to the target
+local function IsDebuffApplied(debuffName, unit)
+    for i = 0, 40 do
+        local name = UnitDebuff(unit, i)
+        if not name then break end
+        if name == debuffName then
+            return true
+        end
+    end
+    return false
+end
+
 -- Function to suggest the next spell
 local function SuggestNextSpell()
-    -- Example logic for selecting a spell
     local spellName, icon
-    if IsUsableSpell("Shadow Word: Pain") then
+
+    -- Check if Shadow Word: Pain is applied to the target
+    if IsDebuffApplied("Shadow Word: Pain", "target") then
+        if IsUsableSpell("Mind Flay") and not IsSpellOnCooldown("Mind Flay") then
+            spellName = "Mind Flay"
+            icon = "Interface\\Icons\\Spell_Shadow_SiphonMana"
+        end
+    elseif IsUsableSpell("Shadow Word: Pain") and not IsSpellOnCooldown("Shadow Word: Pain") then
         spellName = "Shadow Word: Pain"
         icon = "Interface\\Icons\\Spell_Shadow_ShadowWordPain"
-    elseif IsUsableSpell("Mind Blast") and not IsSpellOnCooldown("Mind Blast") then
-        spellName = "Mind Blast"
-        icon = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy"
-    else
-        spellName = nil
-        icon = nil
     end
 
+   
     -- Update the frame and button
     if spellName then
         frame.texture:SetTexture(icon)
@@ -40,7 +53,7 @@ end
 
 -- Event handler to update suggestions
 frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_TARGET_CHANGED" then
+    if event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_TARGET_CHANGED" or event == "UNIT_AURA" then
         SuggestNextSpell()
     end
 end)
@@ -48,6 +61,7 @@ end)
 -- Register events
 frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+frame:RegisterEvent("UNIT_AURA")
 
 -- Initial suggestion
 SuggestNextSpell()
