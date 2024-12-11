@@ -11,8 +11,7 @@ frame:RegisterForDrag("LeftButton")
 frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
-
--- delay for human input
+-- Delay for human input
 local HumanFactor = 0.100
 -- Adjustable for ideal Shadowfiend usage 0.5 -> 50%
 local LowPower = 0.5
@@ -29,68 +28,53 @@ local SpellIcons = {
     VampiricEmbrace = "Interface\\Icons\\Spell_shadow_UnsummonBuilding",
     InnerFire       = "Interface\\Icons\\Spell_Holy_InnerFire",
     ShadowWordDeath = "Interface\\Icons\\Spell_Shadow_DemonicFortitude"
-
 }
-
-
-
 
 -- Function to check if a debuff is applied to the target and return the remaining time
 local function GetDebuffRemainingTime(debuffName, unit)
     for i = 1, 99 do
-        local name, _, _, _, _, _,timeLeft = UnitDebuff(unit, i, "PLAYER")
-        
-        -- No more debuffs
-        if not name then 
-            break 
+        local name, _, _, _, _, _, timeLeft = UnitDebuff(unit, i, "PLAYER")
+        if not name then
+            break
         end
-
-        --Found the debuff
         if name == debuffName then
             local currentTime = GetTime()
-            local remainingTime = timeLeft - currentTime 
-            return remainingTime  -- Return the remaining time if the debuff is found
+            local remainingTime = timeLeft - currentTime
+            return remainingTime -- Return the remaining time if the debuff is found
         end
     end
-    return 0  -- Return 0 if the debuff is not found
+    return 0 -- Return 0 if the debuff is not found
 end
 
---  Function that returns Shadow Weaving count
+-- Function to get the Shadow Weaving stack count
 local function GetShadowWeavingStacks()
-for i = 1, 99 do
+    for i = 1, 99 do
         local name, _, _, count = UnitBuff("PLAYER", i)
-        
-        -- No more buffs
-        if not name then 
-            break 
+        if not name then
+            break
         end
-
         if name == "Shadow Weaving" then
-            return count  -- Return the Shadow Weaving count
+            return count -- Return the Shadow Weaving count
         end
     end
-    return 0  -- Return 0 if Shadow Weaving buff is not found
+    return 0 -- Return 0 if Shadow Weaving buff is not found
 end
 
-
---  Function that returns true if buff is on player
+-- Function to check if a buff exists on the player
 local function BuffExists(buff)
-for i = 1, 99 do
+    for i = 1, 99 do
         local name, _, _, count = UnitBuff("PLAYER", i)
-        
-        -- No more buffs
-        if not name then 
-            break 
+        if not name then
+            break
         end
-
         if name == buff then
-            return true  -- Return true if buff exists
+            return true -- Return true if buff exists
         end
     end
-    return false  -- Return 0 if buff is not found
+    return false -- Return false if buff is not found
 end
 
-
+-- Function to get the time remaining for a cast
 local function GetTimeToEndCast()
     -- Check if the unit is currently casting
     local spellName, _, _, _, startTime, endTime = UnitCastingInfo("PLAYER")
@@ -119,51 +103,43 @@ local function GetTimeToEndCast()
     return remainingTime, spellName -- Return remaining cast time if it's greater than GCD
 end
 
-
-
 -- Function to suggest the next spell
 local function SuggestNextSpell()
-    
     if not BuffExists("Inner Fire") then
-       frame.texture:SetTexture(SpellIcons.InnerFire)
-       return
-    elseif 
-        not BuffExists("Vampiric Embrace") then
+        frame.texture:SetTexture(SpellIcons.InnerFire)
+        return
+    elseif not BuffExists("Vampiric Embrace") then
         frame.texture:SetTexture(SpellIcons.VampiricEmbrace)
         return
     end
 
-    --Check if you either have or can attack target
+    -- Check if you either have or can attack the target
     if not UnitCanAttack("player", "target") then
-        frame.texture:SetTexture(nil);
+        frame.texture:SetTexture(nil)
         return
     end
 
-    --  Stores next spell suggestion
-    local icon 
+    -- Stores next spell suggestion
+    local icon
 
-    -- Checks for SW:Pain
+    -- Checks for debuff remaining times
     local SWP_TimeLeft = GetDebuffRemainingTime("Shadow Word: Pain", "target")
-    
-    -- Checks for Devouring Plague
     local DP_TimeLeft = GetDebuffRemainingTime("Devouring Plague", "target")
-    
-    -- Checks for VampiricTouch
     local VT_TimeLeft = GetDebuffRemainingTime("Vampiric Touch", "target")
 
     -- Stores amount of Shadow Weaving stacks
     local ShadowWeaving_Count = GetShadowWeavingStacks()
 
+    -- Get cooldowns for spells
     local _, Shadowfiend_Cooldown = GetSpellCooldown("Shadowfiend")
-
     local _, Mindblast_Cooldown = GetSpellCooldown("Mind Blast")
-
     local _, _, _, _, _, _, MindBlast_CastTime = GetSpellInfo("Mind Blast")
-    MindBlast_CastTime = (MindBlast_CastTime) / 1000
-    if MindBlast_CastTime > 0.95 then   -- Estimation when would not be worth to cast mind blast (like during hero)
+    MindBlast_CastTime = MindBlast_CastTime / 1000
+
+    if MindBlast_CastTime > 0.95 then
         MindBlast_CastTime = true
     else
-        MindBlast_CastTime =  false
+        MindBlast_CastTime = false
     end
 
     local _, ShadowWordDeath_Cooldown = GetSpellCooldown("Shadow Word: Death")
@@ -173,26 +149,24 @@ local function SuggestNextSpell()
     local powerMax = UnitPowerMax("PLAYER")
     local relativePower = power / powerMax
 
-
     local CurrentCastTimeRemaining, currentSpellCasted = GetTimeToEndCast()
 
-    if (currentSpellCasted == "Mind Flay") then
+    if currentSpellCasted == "Mind Flay" then
         ShadowWeaving_Count = ShadowWeaving_Count + 1
     end
 
-    
-    if GetUnitSpeed("PLAYER") > 0 then
+    if relativePower < LowPower and Shadowfiend_Cooldown == 0 then
+        icon = SpellIcons.Shadowfiend
+    elseif GetUnitSpeed("PLAYER") > 0 then
         if SWP_TimeLeft == 0 and ShadowWeaving_Count == 5 then
             icon = SpellIcons.ShadowWordPain
-        elseif ShadowWordDeath_Cooldown == 0 then
+        elseif ShadowWordDeath_Cooldown < HumanFactor then
             icon = SpellIcons.ShadowWordDeath
         else
             icon = SpellIcons.DevouringPlague
         end
-    elseif (SWP_TimeLeft > 0 and SWP_TimeLeft < 2) then
+    elseif SWP_TimeLeft > 0 and SWP_TimeLeft < 2 then
         icon = SpellIcons.MindFlay
-    elseif (relativePower < LowPower and Shadowfiend_Cooldown == 0) then
-        icon = SpellIcons.Shadowfiend
     elseif currentSpellCasted ~= "Vampiric Touch" and VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 1 then
         icon = SpellIcons.VampiricTouch
     elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining then
@@ -208,33 +182,26 @@ local function SuggestNextSpell()
     end
 
     frame.texture:SetTexture(icon)
-
 end
-
 
 -- Event handler to update suggestions
 frame:SetScript("OnEvent", function(self, event, unit, spellName, ...)
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        --local _, _, _, _, name = CombatLogGetCurrentEventInfo()
-        --if name == "PLAYER" then
-            SuggestNextSpell()
-        --end
+        SuggestNextSpell()
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_TARGET_CHANGED" then
-        -- Force a suggestion update for target change
         SuggestNextSpell()
     elseif event == "UNIT_AURA" then
-        -- Specifically for the target unit (checking aura for debuff changes)
         if unit == "target" then
             SuggestNextSpell()
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        -- When the player successfully casts a spell
         if unit == "player" then
-            SuggestNextSpell()    
+            SuggestNextSpell()
         end
     end
 end)
 
+-- Toggle function to enable or disable the addon
 function SetState()
     if deactivate == false then
         frame:Show()
@@ -253,15 +220,15 @@ function SetState()
         frame:EnableMouse(false) -- Disable mouse interaction
         frame:UnregisterAllEvents() -- Unregister all events to stop any processing
     end
-
-
 end
 
+-- Slash command to toggle the addon
 SLASH_AUTOMATAPriest1 = "/automatapriest"
 SlashCmdList["AUTOMATAPriest"] = function(msg)
     SetState()
 end
 
+-- Register events
 frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 frame:RegisterEvent("UNIT_AURA")
