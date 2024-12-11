@@ -8,9 +8,8 @@ frame.texture:SetTexture("Interface\\Icons\\Spell_Shadow_ShadowWordPain") -- Def
 
 
 
-local GCD = 1
-local HumanFactor = 0.0
-
+local HumanFactor = 0.0500
+local LowPower = 0.5
 -- Deactivate/Activate addon
 local deactivate = true
 
@@ -66,6 +65,35 @@ end
 
 
 
+local function GetTimeToEndCast()
+    -- Check if the unit is currently casting
+    local spellName, _, _, _, startTime, endTime = UnitCastingInfo("PLAYER")
+    if not spellName then
+        -- Check if the unit is channeling instead
+        spellName, _, _, _, startTime, endTime = UnitChannelInfo("PLAYER")
+    end
+
+    -- Calculate remaining cast time if applicable
+    local remainingTime = 0
+    if spellName and startTime and endTime then
+        local currentTime = GetTime() * 1000
+        remainingTime = (endTime - currentTime) / 1000
+        remainingTime = remainingTime > 0 and remainingTime or 0
+    end
+
+    -- Check the GCD
+    local gcdStart, gcdDuration = GetSpellCooldown(61304) -- 61304 is the GCD spell ID
+    local gcdRemaining = (gcdStart + gcdDuration - GetTime())
+
+    -- Return the greater of GCD or cast time if GCD is active
+    if gcdDuration > 0 and (gcdRemaining > remainingTime or remainingTime == 0) then
+        return gcdRemaining > 0 and gcdRemaining or 0
+    end
+
+    return remainingTime, spellName -- Return remaining cast time if it's greater than GCD
+end
+
+
 -- Function to suggest the next spell
 local function SuggestNextSpell()
     
@@ -99,22 +127,45 @@ local function SuggestNextSpell()
     local ShadowWeaving_Count = GetShadowWeavingStacks()
     
     
+
     local _, Shadowfiend_Cooldown = GetSpellCooldown("Shadowfiend")
 
     local _, Mindblast_Cooldown = GetSpellCooldown("Mind Blast")
 
 
+    -- Provides Mana calculations
+    local power = UnitPower("PLAYER")
+    local powerMax = UnitPowerMax("PLAYER")
+    local relativePower = power / powerMax
 
+
+    local CurrentCastTimeRemaining, currentSpellCasted = GetTimeToEndCast()
+
+    if (currentSpellCasted == "Mind Flay") then
+        ShadowWeaving_Count = ShadowWeaving_Count + 1
+    end
+
+    --[[
+            If Shadow Word: pain is about to expire, quick mind flay cast
+    ]]
+    if (SWP_TimeLeft > 0 and SWP_TimeLeft < 2) then
+        icon = SpellIcons.MindFlay
+
+    --[[
+            If low on mana and Shadowfiend is ready
+    ]]
+    elseif (relativePower < LowPower and Shadowfiend_Cooldown == 0) then
+        icon = SpellIcons.Shadowfiend
 
     --[[
             If Vampiric Touch expires faster than 2 instant then
                 - If it expires before first cast is finished do Vampiric Touch
                 - If it expires after  first cast is finished do Mind Blast (If ready)
     ]]
-    if (VT_TimeLeft < GCD + HumanFactor) or (VT_TimeLeft < 2 * GCD + HumanFactor and Mindblast_Cooldown == 0) then
-        if VT_TimeLeft < GCD + HumanFactor then             -- expires before first cast is finished cast do Vampiric Touch
+    elseif currentSpellCasted ~= "Vampiric Touch" and ((VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor) or (VT_TimeLeft < 2 * CurrentCastTimeRemaining + HumanFactor and Mindblast_Cooldown == 0)) then
+        if VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor then             -- expires before first cast is finished cast do Vampiric Touch
             icon = SpellIcons.VampiricTouch
-        else                                                -- expires after  first cast is finished cast do Mind Blast
+        else                                                                     -- expires after  first cast is finished cast do Mind Blast
             icon = SpellIcons.MindBlast
         end
     
@@ -122,18 +173,18 @@ local function SuggestNextSpell()
             If Devouring Plague expired
                 - Refresh DevouringPlague
     ]]
-    elseif (DP_TimeLeft < 0 + HumanFactor) or (DP_TimeLeft < GCD + HumanFactor) then
-        if DP_TimeLeft > HumanFactor then             -- Devouring PLague did not expired yet
-            icon = SpellIcons.MindBlast
-        else                                          -- Devouring Plague already expired
+    elseif (DP_TimeLeft < CurrentCastTimeRemaining + HumanFactor) or (DP_TimeLeft < CurrentCastTimeRemaining + HumanFactor) then
+        if DP_TimeLeft < CurrentCastTimeRemaining then             -- Devouring Plague already expired
             icon = SpellIcons.DevouringPlague
+        else                                                       -- Devouring PLague did not expired yet
+            icon = SpellIcons.MindBlast
         end
 
     --[[
             If Shadow Word :Pain is not on target
             If ShadowWeaving_Count is on max (5)
     ]]
-    elseif SWP_TimeLeft == 0 and ShadowWeaving_Count == 5 then
+    elseif SWP_TimeLeft < CurrentCastTimeRemaining + HumanFactor and ShadowWeaving_Count == 5 then
         icon = SpellIcons.ShadowWordPain
     else
         icon = SpellIcons.MindFlay
@@ -148,10 +199,10 @@ end
 -- Event handler to update suggestions
 frame:SetScript("OnEvent", function(self, event, unit, spellName, ...)
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local _, _, _, _, name = CombatLogGetCurrentEventInfo()
-        if name == "PLAYER" then
+        --local _, _, _, _, name = CombatLogGetCurrentEventInfo()
+        --if name == "PLAYER" then
             SuggestNextSpell()
-        end
+        --end
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_TARGET_CHANGED" then
         -- Force a suggestion update for target change
         SuggestNextSpell()
