@@ -4,7 +4,7 @@ frame:SetSize(50, 50)
 frame:SetPoint("CENTER")
 frame.texture = frame:CreateTexture(nil, "BACKGROUND")
 frame.texture:SetAllPoints()
-frame.texture:SetTexture("Interface\\Icons\\Spell_Shadow_ShadowWordPain") -- Default icon
+frame.texture:SetTexture(nil) -- Default icon
 
 
 
@@ -13,15 +13,17 @@ local LowPower = 0.5
 -- Deactivate/Activate addon
 local deactivate = true
 
-
 local SpellIcons = {
     VampiricTouch   = "Interface\\Icons\\Spell_Holy_Stoicism",
     DevouringPlague = "Interface\\Icons\\Spell_Shadow_DevouringPlague",
     ShadowWordPain  = "Interface\\Icons\\Spell_Shadow_ShadowWordPain",
     MindFlay        = "Interface\\Icons\\Spell_Shadow_SiphonMana",
     MindBlast       = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy",
-    Shadowfiend     = "Interface\\Icons\\Spell_Shadow_Shadowfiend"
+    Shadowfiend     = "Interface\\Icons\\Spell_Shadow_Shadowfiend",
+    VampiricEmbrace = "Interface\\Icons\\Spell_shadow_UnsummonBuilding",
+    InnerFire       = "Interface\\Icons\\Spell_Holy_InnerFire"
 }
+
 
 
 
@@ -55,7 +57,6 @@ for i = 1, 99 do
             break 
         end
 
-        --Found the debuff
         if name == "Shadow Weaving" then
             return count  -- Return the Shadow Weaving count
         end
@@ -63,6 +64,23 @@ for i = 1, 99 do
     return 0  -- Return 0 if Shadow Weaving buff is not found
 end
 
+
+--  Function that returns true if buff is on player
+local function BuffExists(buff)
+for i = 1, 99 do
+        local name, _, _, count = UnitBuff("PLAYER", i)
+        
+        -- No more buffs
+        if not name then 
+            break 
+        end
+
+        if name == buff then
+            return true  -- Return true if buff exists
+        end
+    end
+    return false  -- Return 0 if buff is not found
+end
 
 
 local function GetTimeToEndCast()
@@ -94,6 +112,7 @@ local function GetTimeToEndCast()
 end
 
 
+
 -- Function to suggest the next spell
 local function SuggestNextSpell()
     
@@ -102,14 +121,24 @@ local function SuggestNextSpell()
         return
     end
     
+    if not UnitAffectingCombat("PLAYER") then
+        if not BuffExists("Inner Fire") then
+            frame.texture:SetTexture(SpellIcons.InnerFire)
+            return
+        elseif 
+            not BuffExists("Vampiric Embrace") then
+            frame.texture:SetTexture(SpellIcons.VampiricEmbrace)
+            return
+        end
+    end
+
+
 
     --Check if you either have or can attack target
     if not UnitCanAttack("player", "target") then
         frame.texture:SetTexture(nil);
         return
     end
-
-
 
     --  Stores next spell suggestion
     local icon 
@@ -189,7 +218,6 @@ local function SuggestNextSpell()
     else
         icon = SpellIcons.MindFlay
     end
-
 
     frame.texture:SetTexture(icon)
 
