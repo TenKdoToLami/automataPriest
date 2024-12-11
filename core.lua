@@ -5,6 +5,11 @@ frame:SetPoint("CENTER")
 frame.texture = frame:CreateTexture(nil, "BACKGROUND")
 frame.texture:SetAllPoints()
 frame.texture:SetTexture(nil) -- Default icon
+frame:SetMovable(true)
+frame:EnableMouse(true)
+frame:RegisterForDrag("LeftButton")
+frame:SetScript("OnDragStart", frame.StartMoving)
+frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
 
 -- delay for human input
@@ -119,11 +124,6 @@ end
 -- Function to suggest the next spell
 local function SuggestNextSpell()
     
-    -- No action, disabled addon
-    if deactivate then
-        return
-    end
-    
     if not BuffExists("Inner Fire") then
        frame.texture:SetTexture(SpellIcons.InnerFire)
        return
@@ -235,29 +235,35 @@ frame:SetScript("OnEvent", function(self, event, unit, spellName, ...)
     end
 end)
 
+function SetState()
+    if deactivate == false then
+        frame:Show()
+        frame:EnableMouse(true)
+        frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+        frame:RegisterEvent("PLAYER_TARGET_CHANGED")
+        frame:RegisterEvent("UNIT_AURA")
+        frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        print("Automatapriest enabled.")
+        deactivate = true
+    else
+        print("Automatapriest disabled.")
+        deactivate = false
+        frame:Hide()
+        frame:EnableMouse(false) -- Disable mouse interaction
+        frame:UnregisterAllEvents() -- Unregister all events to stop any processing
+    end
 
+
+end
 
 SLASH_AUTOMATAPriest1 = "/automatapriest"
 SlashCmdList["AUTOMATAPriest"] = function(msg)
-    deactivate = not deactivate  -- Toggle the addon state
-    if deactivate then
-        print("Automatapriest disabled.")
-    else
-        print("Automatapriest enabled.")
-        frame.texture:SetTexture(nil)  -- Hide the frame when disabled
-    end
+    SetState()
 end
 
--- Register events
 frame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 frame:RegisterEvent("UNIT_AURA")
 frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-
-
-frame:SetMovable(true)
-frame:EnableMouse(true)
-frame:RegisterForDrag("LeftButton")
-frame:SetScript("OnDragStart", frame.StartMoving)
-frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
