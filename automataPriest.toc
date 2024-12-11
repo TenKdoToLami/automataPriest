@@ -1,3 +1,6 @@
 ## Interface: 110000
-## Title: automataPriest
+## Author: Za The Slacker
+## Title: Automatic scuffed shadow priest whisperer
+## Note: terrible rotation guide
+## Version: Unstable 1.0.35 pre-alpha
 core.lua
