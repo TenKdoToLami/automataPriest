@@ -7,8 +7,9 @@ frame.texture:SetAllPoints()
 frame.texture:SetTexture(nil) -- Default icon
 
 
-
-local HumanFactor = 0.0500
+-- delay for human input
+local HumanFactor = 0.100
+-- Adjustable for ideal Shadowfiend usage 0.5 -> 50%
 local LowPower = 0.5
 -- Deactivate/Activate addon
 local deactivate = true
@@ -21,7 +22,9 @@ local SpellIcons = {
     MindBlast       = "Interface\\Icons\\Spell_Shadow_UnholyFrenzy",
     Shadowfiend     = "Interface\\Icons\\Spell_Shadow_Shadowfiend",
     VampiricEmbrace = "Interface\\Icons\\Spell_shadow_UnsummonBuilding",
-    InnerFire       = "Interface\\Icons\\Spell_Holy_InnerFire"
+    InnerFire       = "Interface\\Icons\\Spell_Holy_InnerFire",
+    ShadowWordDeath = "Interface\\Icons\\Spell_Shadow_DemonicFortitude"
+
 }
 
 
@@ -105,7 +108,7 @@ local function GetTimeToEndCast()
 
     -- Return the greater of GCD or cast time if GCD is active
     if gcdDuration > 0 and (gcdRemaining > remainingTime or remainingTime == 0) then
-        return gcdRemaining > 0 and gcdRemaining or 0
+        return gcdRemaining > 0 and gcdRemaining or 0, spellName
     end
 
     return remainingTime, spellName -- Return remaining cast time if it's greater than GCD
@@ -117,22 +120,18 @@ end
 local function SuggestNextSpell()
     
     -- No action, disabled addon
-    if Deactivate then
+    if deactivate then
         return
     end
     
-    if not UnitAffectingCombat("PLAYER") then
-        if not BuffExists("Inner Fire") then
-            frame.texture:SetTexture(SpellIcons.InnerFire)
-            return
-        elseif 
-            not BuffExists("Vampiric Embrace") then
-            frame.texture:SetTexture(SpellIcons.VampiricEmbrace)
-            return
-        end
+    if not BuffExists("Inner Fire") then
+       frame.texture:SetTexture(SpellIcons.InnerFire)
+       return
+    elseif 
+        not BuffExists("Vampiric Embrace") then
+        frame.texture:SetTexture(SpellIcons.VampiricEmbrace)
+        return
     end
-
-
 
     --Check if you either have or can attack target
     if not UnitCanAttack("player", "target") then
@@ -154,13 +153,20 @@ local function SuggestNextSpell()
 
     -- Stores amount of Shadow Weaving stacks
     local ShadowWeaving_Count = GetShadowWeavingStacks()
-    
-    
 
     local _, Shadowfiend_Cooldown = GetSpellCooldown("Shadowfiend")
 
     local _, Mindblast_Cooldown = GetSpellCooldown("Mind Blast")
 
+    local _, _, _, _, _, _, MindBlast_CastTime = GetSpellInfo("Mind Blast")
+    MindBlast_CastTime = (MindBlast_CastTime) / 1000
+    if MindBlast_CastTime > 0.95 then   -- Estimation when would not be worth to cast mind blast (like during hero)
+        MindBlast_CastTime = true
+    else
+        MindBlast_CastTime =  false
+    end
+
+    local _, ShadowWordDeath_Cooldown = GetSpellCooldown("Shadow Word: Death")
 
     -- Provides Mana calculations
     local power = UnitPower("PLAYER")
@@ -174,45 +180,27 @@ local function SuggestNextSpell()
         ShadowWeaving_Count = ShadowWeaving_Count + 1
     end
 
-    --[[
-            If Shadow Word: pain is about to expire, quick mind flay cast
-    ]]
-    if (SWP_TimeLeft > 0 and SWP_TimeLeft < 2) then
+    
+    if GetUnitSpeed("PLAYER") > 0 then
+        if SWP_TimeLeft == 0 and ShadowWeaving_Count == 5 then
+            icon = SpellIcons.ShadowWordPain
+        elseif ShadowWordDeath_Cooldown == 0 then
+            icon = SpellIcons.ShadowWordDeath
+        else
+            icon = SpellIcons.DevouringPlague
+        end
+    elseif (SWP_TimeLeft > 0 and SWP_TimeLeft < 2) then
         icon = SpellIcons.MindFlay
-
-    --[[
-            If low on mana and Shadowfiend is ready
-    ]]
     elseif (relativePower < LowPower and Shadowfiend_Cooldown == 0) then
         icon = SpellIcons.Shadowfiend
-
-    --[[
-            If Vampiric Touch expires faster than 2 instant then
-                - If it expires before first cast is finished do Vampiric Touch
-                - If it expires after  first cast is finished do Mind Blast (If ready)
-    ]]
-    elseif currentSpellCasted ~= "Vampiric Touch" and ((VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor) or (VT_TimeLeft < 2 * CurrentCastTimeRemaining + HumanFactor and Mindblast_Cooldown == 0)) then
-        if VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor then             -- expires before first cast is finished cast do Vampiric Touch
-            icon = SpellIcons.VampiricTouch
-        else                                                                     -- expires after  first cast is finished cast do Mind Blast
-            icon = SpellIcons.MindBlast
-        end
-    
-    --[[
-            If Devouring Plague expired
-                - Refresh DevouringPlague
-    ]]
-    elseif (DP_TimeLeft < CurrentCastTimeRemaining + HumanFactor) or (DP_TimeLeft < CurrentCastTimeRemaining + HumanFactor) then
-        if DP_TimeLeft < CurrentCastTimeRemaining then             -- Devouring Plague already expired
-            icon = SpellIcons.DevouringPlague
-        else                                                       -- Devouring PLague did not expired yet
-            icon = SpellIcons.MindBlast
-        end
-
-    --[[
-            If Shadow Word :Pain is not on target
-            If ShadowWeaving_Count is on max (5)
-    ]]
+    elseif currentSpellCasted ~= "Vampiric Touch" and VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 1 then
+        icon = SpellIcons.VampiricTouch
+    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining then
+        icon = SpellIcons.DevouringPlague
+    elseif VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 2 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
+        icon = SpellIcons.MindBlast
+    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining + 1 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
+        icon = SpellIcons.MindBlast
     elseif SWP_TimeLeft < CurrentCastTimeRemaining + HumanFactor and ShadowWeaving_Count == 5 then
         icon = SpellIcons.ShadowWordPain
     else
@@ -253,9 +241,9 @@ SLASH_AUTOMATAPriest1 = "/automatapriest"
 SlashCmdList["AUTOMATAPriest"] = function(msg)
     deactivate = not deactivate  -- Toggle the addon state
     if deactivate then
-        print("Automatapriest enabled.")
-    else
         print("Automatapriest disabled.")
+    else
+        print("Automatapriest enabled.")
         frame.texture:SetTexture(nil)  -- Hide the frame when disabled
     end
 end
