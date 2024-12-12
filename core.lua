@@ -12,7 +12,7 @@ frame:SetScript("OnDragStart", frame.StartMoving)
 frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
 -- Delay for human input
-local HumanFactor = 0.100
+local HumanFactor = 0.025
 -- Adjustable for ideal Shadowfiend usage 0.5 -> 50%
 local LowPower = 0.5
 -- Deactivate/Activate addon
@@ -96,13 +96,19 @@ local function GetTimeToEndCast()
     local gcdRemaining = (gcdStart + gcdDuration - GetTime())
 
     -- Return the greater of GCD or cast time if GCD is active
-    if gcdDuration > 0 and (gcdRemaining > remainingTime or remainingTime == 0) then
-        return gcdRemaining > 0 and gcdRemaining or 0, spellName
+    if gcdDuration > 0 then
+        return math.max(gcdRemaining, remainingTime), spellName
     end
 
     return remainingTime, spellName -- Return remaining cast time if it's greater than GCD
 end
 
+
+local lastTarget = nil
+local lastSpell = nil
+local lastSpellRemainingTime = 0
+local lastShadowWeaving = -1
+local change = true
 -- Function to suggest the next spell
 local function SuggestNextSpell()
     if not BuffExists("Inner Fire") then
@@ -119,6 +125,17 @@ local function SuggestNextSpell()
         return
     end
 
+    
+    local CurrentCastTimeRemaining, currentSpellCasted = GetTimeToEndCast()
+    local ShadowWeaving_Count = GetShadowWeavingStacks()
+    local currentTarget = UnitGUID("target")
+
+    if not change then
+        if (CurrentCastTimeRemaining < lastSpellRemainingTime and currentTarget == lastTarget and lastSpell == currentSpellCasted and lastShadowWeaving == ShadowWeaving_Count) then
+            return
+        end
+    end
+    change = false
     -- Stores next spell suggestion
     local icon
 
@@ -128,28 +145,40 @@ local function SuggestNextSpell()
     local VT_TimeLeft = GetDebuffRemainingTime("Vampiric Touch", "target")
 
     -- Stores amount of Shadow Weaving stacks
-    local ShadowWeaving_Count = GetShadowWeavingStacks()
 
-    -- Get cooldowns for spells
-    local _, Shadowfiend_Cooldown = GetSpellCooldown("Shadowfiend")
-    local _, Mindblast_Cooldown = GetSpellCooldown("Mind Blast")
-    local _, _, _, _, _, _, MindBlast_CastTime = GetSpellInfo("Mind Blast")
-    MindBlast_CastTime = MindBlast_CastTime / 1000
-
-    if MindBlast_CastTime > 0.95 then
-        MindBlast_CastTime = true
-    else
-        MindBlast_CastTime = false
-    end
-
-    local _, ShadowWordDeath_Cooldown = GetSpellCooldown("Shadow Word: Death")
 
     -- Provides Mana calculations
     local power = UnitPower("PLAYER")
     local powerMax = UnitPowerMax("PLAYER")
     local relativePower = power / powerMax
 
-    local CurrentCastTimeRemaining, currentSpellCasted = GetTimeToEndCast()
+    local _, gcdDuration = GetSpellCooldown(61304)
+
+     -- Get cooldowns for spells
+    local _, Shadowfiend_Cooldown = GetSpellCooldown("Shadowfiend")
+    if (Shadowfiend_Cooldown <= gcdDuration + HumanFactor) then
+        Shadowfiend_Cooldown = 0
+    end
+
+    local _, Mindblast_Cooldown = GetSpellCooldown("Mind Blast")
+    if (Mindblast_Cooldown <= gcdDuration + HumanFactor) then
+        Mindblast_Cooldown = 0
+    end
+
+    local _, ShadowWordDeath_Cooldown = GetSpellCooldown("Shadow Word: Death")
+    
+    if (ShadowWordDeath_Cooldown <= gcdDuration + HumanFactor) then
+        ShadowWordDeath_Cooldown = 0
+    end
+
+    local _, _, _, _, _, _, MindBlast_CastTime = GetSpellInfo("Mind Blast")
+    MindBlast_CastTime = MindBlast_CastTime / 1000
+    if MindBlast_CastTime > 0.95 then
+        MindBlast_CastTime = true
+    else
+        MindBlast_CastTime = false
+    end
+
 
     if currentSpellCasted == "Mind Flay" then
         ShadowWeaving_Count = ShadowWeaving_Count + 1
@@ -160,46 +189,53 @@ local function SuggestNextSpell()
     elseif GetUnitSpeed("PLAYER") > 0 then
         if SWP_TimeLeft == 0 and ShadowWeaving_Count == 5 then
             icon = SpellIcons.ShadowWordPain
-        elseif ShadowWordDeath_Cooldown < CurrentCastTimeRemaining + HumanFactor then
+        elseif ShadowWordDeath_Cooldown < HumanFactor then
             icon = SpellIcons.ShadowWordDeath
         else
             icon = SpellIcons.DevouringPlague
         end
+        change = true
     elseif SWP_TimeLeft > 0 and SWP_TimeLeft < 2 then
         icon = SpellIcons.MindFlay
     elseif currentSpellCasted ~= "Vampiric Touch" and VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 1 then
         icon = SpellIcons.VampiricTouch
     elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining then
         icon = SpellIcons.DevouringPlague
-    elseif VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 2 and Mindblast_Cooldown < CurrentCastTimeRemaining + HumanFactor and MindBlast_CastTime then
+        change = true
+    elseif currentSpellCasted ~= "Vampiric Touch" and VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 2 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
         icon = SpellIcons.MindBlast
-    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining + 1 and Mindblast_Cooldown < CurrentCastTimeRemaining + HumanFactor and MindBlast_CastTime then
+    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining + 1 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
         icon = SpellIcons.MindBlast
     elseif SWP_TimeLeft < CurrentCastTimeRemaining + HumanFactor and ShadowWeaving_Count == 5 then
         icon = SpellIcons.ShadowWordPain
+        change = true
     else
         icon = SpellIcons.MindFlay
     end
 
+
     frame.texture:SetTexture(icon)
+    lastSpellRemainingTime = CurrentCastTimeRemaining
+    lastSpell = currentSpellCasted
+    lastTarget = currentTarget
+    lastShadowWeaving = ShadowWeaving_Count
 end
 
 -- Event handler to update suggestions
-frame:SetScript("OnEvent", function(self, event, unit, spellName, ...)
+frame:SetScript("OnEvent", function(self, event, unit, ...)
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         SuggestNextSpell()
     elseif event == "SPELL_UPDATE_COOLDOWN" or event == "PLAYER_TARGET_CHANGED" then
         SuggestNextSpell()
-    elseif event == "UNIT_AURA" then
-        if unit == "target" then
-            SuggestNextSpell()
-        end
-    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if unit == "player" then
-            SuggestNextSpell()
-        end
+    elseif event == "UNIT_AURA" and unit == "target" then
+        SuggestNextSpell()
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" and unit == "player" then
+        SuggestNextSpell()
+    elseif event == "ACTIONBAR_UPDATE_COOLDOWN" then
+        SuggestNextSpell()
     end
 end)
+
 
 -- Toggle function to enable or disable the addon
 function SetState()
@@ -211,6 +247,7 @@ function SetState()
         frame:RegisterEvent("UNIT_AURA")
         frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
         print("Automatapriest enabled.")
         deactivate = true
     else
@@ -234,3 +271,4 @@ frame:RegisterEvent("PLAYER_TARGET_CHANGED")
 frame:RegisterEvent("UNIT_AURA")
 frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+frame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
