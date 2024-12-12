@@ -160,7 +160,7 @@ local function SuggestNextSpell()
     elseif GetUnitSpeed("PLAYER") > 0 then
         if SWP_TimeLeft == 0 and ShadowWeaving_Count == 5 then
             icon = SpellIcons.ShadowWordPain
-        elseif ShadowWordDeath_Cooldown < HumanFactor then
+        elseif ShadowWordDeath_Cooldown < CurrentCastTimeRemaining + HumanFactor then
             icon = SpellIcons.ShadowWordDeath
         else
             icon = SpellIcons.DevouringPlague
@@ -171,9 +171,9 @@ local function SuggestNextSpell()
         icon = SpellIcons.VampiricTouch
     elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining then
         icon = SpellIcons.DevouringPlague
-    elseif VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 2 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
+    elseif VT_TimeLeft < CurrentCastTimeRemaining + HumanFactor + 2 and Mindblast_Cooldown < CurrentCastTimeRemaining + HumanFactor and MindBlast_CastTime then
         icon = SpellIcons.MindBlast
-    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining + 1 and Mindblast_Cooldown == 0 and MindBlast_CastTime then
+    elseif DP_TimeLeft < HumanFactor + CurrentCastTimeRemaining + 1 and Mindblast_Cooldown < CurrentCastTimeRemaining + HumanFactor and MindBlast_CastTime then
         icon = SpellIcons.MindBlast
     elseif SWP_TimeLeft < CurrentCastTimeRemaining + HumanFactor and ShadowWeaving_Count == 5 then
         icon = SpellIcons.ShadowWordPain
